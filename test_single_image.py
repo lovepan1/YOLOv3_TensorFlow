@@ -20,11 +20,12 @@ parser.add_argument("--anchor_path", type=str, default="./data/yolo_anchors.txt"
                     help="The path of the anchor txt file.")
 parser.add_argument("--new_size", nargs='*', type=int, default=[416, 416],
                     help="Resize the input image with `new_size`, size format: [width, height]")
-parser.add_argument("--class_name_path", type=str, default="./data/coco.names",
+parser.add_argument("--class_name_path", type=str, default="./data/my_data/dianli_class.names",
                     help="The path of the class names.")
-parser.add_argument("--restore_path", type=str, default="./data/darknet_weights/yolov3.ckpt",
+parser.add_argument("--restore_path", type=str, default='/home/pcl/tensorflow1.12/YOLOv3_TensorFlow/checkpoint/best_model_Epoch_29_step_2219.0_mAP_0.0841_loss_17.1935_lr_0.0008153726.ckpt',
                     help="The path of the weights to restore.")
 args = parser.parse_args()
+
 
 args.anchors = parse_anchors(args.anchor_path)
 args.classes = read_class_names(args.class_name_path)
@@ -48,7 +49,7 @@ with tf.Session() as sess:
 
     pred_scores = pred_confs * pred_probs
 
-    boxes, scores, labels = gpu_nms(pred_boxes, pred_scores, args.num_class, max_boxes=30, score_thresh=0.4, iou_thresh=0.5)
+    boxes, scores, labels = gpu_nms(pred_boxes, pred_scores, args.num_class, max_boxes=30, score_thresh=0.4, nms_thresh=0.5)
 
     saver = tf.train.Saver()
     saver.restore(sess, args.restore_path)
@@ -73,6 +74,6 @@ with tf.Session() as sess:
     for i in range(len(boxes_)):
         x0, y0, x1, y1 = boxes_[i]
         plot_one_box(img_ori, [x0, y0, x1, y1], label=args.classes[labels_[i]], color=color_table[labels_[i]])
-    cv2.imshow('Detection result', img_ori)
+    # cv2.imshow('Detection result', img_ori)
     cv2.imwrite('detection_result.jpg', img_ori)
     cv2.waitKey(0)
