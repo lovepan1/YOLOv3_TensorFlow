@@ -135,9 +135,21 @@ if args.save_optimizer:
 
 # set dependencies for BN ops
 update_ops_finetune = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+grads_list = []
 with tf.control_dependencies(update_ops_finetune):
-    train_op_finetune = optimizer_finetune.minimize(loss_fintune[0] + l2_loss_fintune, var_list=update_vars_finetune,
-                                                    global_step=global_step_finetune)
+    grads_varlist = optimizer_finetune.compute_gradients(loss_fintune[0] + l2_loss_fintune, var_list=update_vars_finetune)
+    for i, (g, v) in enumerate(grads_varlist):
+        if g is None:
+            print("gradients is None")
+            print(v)
+        else:
+            grads_varlist[i] = (tf.clip_by_norm(g, 10), v)
+            grads_list.append(grads_varlist[i][0])
+            print('grads is caijian')
+    # # grad = tf.gradients(loss_fintune[0], update_vars_finetune)
+    train_op_finetune = optimizer_finetune.apply_gradients(grads_varlist, global_step=global_step_finetune)
+    # train_op_finetune = optimizer_finetune.minimize(loss_fintune[0] + l2_loss_fintune, var_list=update_vars_finetune,
+    #                                                 global_step=global_step_finetune)
 
 with tf.Session() as sess:
 #################################### begining finetune ###########################################
@@ -156,6 +168,7 @@ with tf.Session() as sess:
     merged_fintune = tf.summary.merge_all()
     writer_fintune = tf.summary.FileWriter(args.log_dir, sess.graph)
 
+
     print('\n----------- start to finetune -----------\n')
 
     best_mAP_finetune = -np.Inf
@@ -165,11 +178,16 @@ with tf.Session() as sess:
         loss_total_finetune, loss_xy_finetune, loss_wh_finetune, loss_conf_finetune, loss_class_finetune = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
 
         for i in trange(args.train_batch_num):
-            _, summary_finetune, __y_pred_finetune, __y_true_finetune, __loss_finetune, __global_step_finetune, __lr_finetune = sess.run(
+            _, summary_finetune, __y_pred_finetune, __y_true_finetune, __loss_finetune, __global_step_finetune, __lr_finetune,= sess.run(
                 [train_op_finetune, merged_fintune, y_pred_fintune, y_true, loss_fintune, global_step_finetune, learning_rate_finetune],
                 feed_dict={is_training: True})
+            # try:
+            #     __grads = sess.run(grads_list, feed_dict={is_training: True})
+            #     # for i in __grads:
+            #     #     print('current l2 is ', np.linalg.norm(i))
+            # except:
+            #     print('grads clac is error')
             writer_fintune.add_summary(summary_finetune, global_step=__global_step_finetune)
-
             loss_total_finetune.update(__loss_finetune[0], len(__y_true_finetune[0]))
             loss_xy_finetune.update(__loss_finetune[1], len(__y_true_finetune[0]))
             loss_wh_finetune.update(__loss_finetune[2], len(__y_true_finetune[0]))
