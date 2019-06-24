@@ -77,3 +77,7 @@ train_batch_num = int(math.ceil(float(train_img_cnt) / batch_size))
 
 lr_decay_freq = int(train_batch_num * lr_decay_epoch)
 pw_boundaries = [float(i) * train_batch_num + global_step for i in pw_boundaries]
+
+### sliming prune ####
+sliming = True
+s = 1e-4
