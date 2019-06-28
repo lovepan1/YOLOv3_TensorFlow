@@ -70,39 +70,7 @@ class SlimPruning:
                 print("Running filter pruning {0}".format(pruning_iteration))
                 weight_dict = self._prune_first_stage()
                 sliming_yolo_model = self._reconstruction_model()
-
-
-                # Computing statistics
-                # nb_of_pruned_filters = sum(pruning_dict.values())
-                # if nb_of_pruned_filters == 0:
-                #     print("Number of pruned filters == 0, so pruning is stopped")
-                #     break
-                # print("Number of pruned filters at this step: {0}".format(nb_of_pruned_filters))
-                # pruning_percent = self._compute_pruning_percent(model)
-                # print("Network is pruned from the original state, by {0} %".format(pruning_percent * 100))
-                #
-                # Finetune step
-                # self._save_after_pruning(model)
-                # self._clean_up_after_pruning(model)
-                # model = self._load_back_saved_model(custom_objects_inside_model)
-                # self._model_compile_fn(model)
-                # if self._model_finetune_fn is not None:
-                #     self._model_finetune_fn(model, self._current_nb_of_epochs,
-                #                             self._current_nb_of_epochs + self._nb_finetune_epochs)
-                # self._current_nb_of_epochs += self._nb_finetune_epochs
-
-                # Stopping conditions
-                # if nb_of_pruned_filters < 1:
-                #     print("No filters were pruned. Pruning is stopped.")
-                #     break
-                # if self._maximum_pruning_percent is not None:
-                #     if pruning_percent > self._maximum_pruning_percent:
-                #         print(
-                #             "Network pruning (currently {0} %) reached the maximum based on your definition ({1} %)".format(
-                #                 pruning_percent * 100, self._maximum_pruning_percent * 100))
-                #         break
                 pruning_iteration += 1
-                #
                 if self._maximum_prune_iterations is not None:
                     if pruning_iteration > self._maximum_prune_iterations:
                         break
@@ -136,32 +104,23 @@ class SlimPruning:
 
 
 
-    def _run_pruning_for_conv2d_layer(self, pruning_factor: float, layer_weight_mtx):
-        _, _, input_channels, nb_channels = layer_weight_mtx.shape
-
-        # Initialize KMeans
-        ########################pruning outputs#########################################
-        nb_of_clusters, _ = self._calculate_number_of_channels_to_keep(pruning_factor, nb_channels)
-        kmeans = cluster.KMeans(nb_of_clusters, "k-means++")
-
-        # Fit with the flattened weight matrix
-        # (height, width, input_channels, output_channels) -> (output_channels, flattened features)
-        layer_weight_mtx_reshaped = layer_weight_mtx.transpose(3, 0, 1, 2).reshape(nb_channels, -1)
-        # Apply some fuzz to the weights, to avoid duplicates
-        layer_weight_mtx_reshaped = self._apply_fuzz(layer_weight_mtx_reshaped)
-        kmeans.fit(layer_weight_mtx_reshaped)
-
-        # If a cluster has only a single member, then that should not be pruned
-        # so that point will always be the closest to the cluster center
-        closest_point_to_cluster_center_indices = metrics.pairwise_distances_argmin(kmeans.cluster_centers_,
-                                                                                    layer_weight_mtx_reshaped)
-        #print('closest_point_to_cluster_center_indices is ', closest_point_to_cluster_center_indices)
+    def _run_pruning_for_conv2d_layer(self, pruning_factor: float, gamma_layer_weight_mtx):
+        _nb_channels = gamma_layer_weight_mtx.shape
+        abs_weight = list(map(abs, gamma_layer_weight_mtx))
+        sorted_weight = np.sort(abs_weight)
+        pruning_threshold = sorted_weight[  np.ceil(  len(abs_weight) * pruning_factor ) ]
+        bool_weight_indice = np.logical_not(abs_weight < pruning_threshold)
+        save_indices = []
+        for i, j in enumerate(bool_weight_indice):
+            if j == True:
+                save_indices.append[i]
         # Compute filter indices which can be pruned
-        channel_indices = set(np.arange(len(layer_weight_mtx_reshaped)))
-        channel_indices_to_keep = set(closest_point_to_cluster_center_indices)
+        channel_indices = set(np.arange(len(gamma_layer_weight_mtx)))
+        channel_indices_to_keep = set(save_indices)
         channel_indices_to_prune = list(channel_indices.difference(channel_indices_to_keep))
         channel_indices_to_keep = list(channel_indices_to_keep)
 
+        nb_of_clusters = len(save_indices)
         if len(channel_indices_to_keep) > nb_of_clusters:
             print("Number of selected channels for pruning is less than expected")
             diff = len(channel_indices_to_keep) - nb_of_clusters
@@ -195,7 +154,11 @@ class SlimPruning:
         for layer_name, layer_weight in layer_name_weights_dict.items():
             if 'weights' in layer_name:
                 ###### prune currnet channel ##############
-                filter_indices_to_prune = self._run_pruning_for_conv2d_layer(pruning_factor, tf_weights_value)
+                ####g get bn layer#################
+                current_layer_name = layer_name
+                current_bn_gamma_layer = current_layer_name.replace('weights', 'BatchNorm/gamma')
+                current_gamma_layer_weight = layer_name_weights_dict[current_bn_gamma_layer]
+                filter_indices_to_prune = self._run_pruning_for_conv2d_layer(pruning_factor, current_gamma_layer_weight)
                 print('filter_indices_to_prune is ', filter_indices_to_prune)
                 W, H, N, nb_channels = layer_weight.shape
                 print("layer_weight.shape is ", layer_weight.shape)
