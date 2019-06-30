@@ -16,7 +16,7 @@ from model_sliming import sliming_yolov3
 
 # from ridurre import base_filter_pruning
 anchor_path = "./data/yolo_anchors.txt"
-class_name_path  = "./data/my_data/dianli_class.names"
+class_name_path  = "./data/voc.names"
 anchors = parse_anchors(anchor_path)
 num_class = len(read_class_names(class_name_path))
 
@@ -26,7 +26,6 @@ class SlimPruning:
     def __init__(self,
                  pruning_factor: float,
                  nb_finetune_epochs: int,
-                 nb_trained_for_epochs: int,
                  maximum_prune_iterations: int,
                  maximum_pruning_percent: float,
                  checkpoint_dir: str,
@@ -39,7 +38,6 @@ class SlimPruning:
         # self._model_finetune_fn = model_finetune_fn
 
         self._nb_finetune_epochs = nb_finetune_epochs
-        self._current_nb_of_epochs = nb_trained_for_epochs
         self._maximum_prune_iterations = maximum_prune_iterations
         self._maximum_pruning_percent = maximum_pruning_percent
 
@@ -52,7 +50,7 @@ class SlimPruning:
 
         # TODO: select a subset of layers to prune
         self._prunable_layers_regex = ".*"
-        self._restore_part_first = ['yolov3/darknet53_body']
+        self._restore_part_first = ['yolov3/darknet53_body', 'yolov3/yolov3_head']
         self._restore_part_second = ['yolov3/darknet53_body','yolov3/yolov3_head']
         self._update_part = ['yolov3/yolov3_head']
         self._img_size = [412, 412]
@@ -70,10 +68,10 @@ class SlimPruning:
                 print("Running filter pruning {0}".format(pruning_iteration))
                 weight_dict = self._prune_first_stage()
                 sliming_yolo_model = self._reconstruction_model()
-                pruning_iteration += 1
-                if self._maximum_prune_iterations is not None:
-                    if pruning_iteration > self._maximum_prune_iterations:
-                        break
+                # pruning_iteration += 1
+                # if self._maximum_prune_iterations is not None:
+                #     if pruning_iteration > self._maximum_prune_iterations:
+                #         break
 
             print("Pruning stopped.")
             # return model, self._current_nb_of_epochs
@@ -108,18 +106,23 @@ class SlimPruning:
         _nb_channels = gamma_layer_weight_mtx.shape
         abs_weight = list(map(abs, gamma_layer_weight_mtx))
         sorted_weight = np.sort(abs_weight)
-        pruning_threshold = sorted_weight[  np.ceil(  len(abs_weight) * pruning_factor ) ]
+        print('curent is sorted_weight', sorted_weight)
+        print('thr id is ', np.ceil(  len(abs_weight) * (1 - pruning_factor )) )
+        pruning_threshold = sorted_weight[  int(np.ceil(  len(abs_weight) * (1 - pruning_factor ) ) )]
+        print('current thr is ', pruning_threshold)
         bool_weight_indice = np.logical_not(abs_weight < pruning_threshold)
         save_indices = []
         for i, j in enumerate(bool_weight_indice):
+            print('current id is ', i)
+            print('current bool is ', j)
             if j == True:
-                save_indices.append[i]
+                save_indices.append(i)
         # Compute filter indices which can be pruned
         channel_indices = set(np.arange(len(gamma_layer_weight_mtx)))
         channel_indices_to_keep = set(save_indices)
         channel_indices_to_prune = list(channel_indices.difference(channel_indices_to_keep))
         channel_indices_to_keep = list(channel_indices_to_keep)
-
+        print('prune ind is ', channel_indices_to_prune)
         nb_of_clusters = len(save_indices)
         if len(channel_indices_to_keep) > nb_of_clusters:
             print("Number of selected channels for pruning is less than expected")
@@ -145,11 +148,12 @@ class SlimPruning:
     def _prune_first_stage(self):
         tf_weights_value = []
         layer_name_weights_dict = dict()
-        checkpoint_path = os.path.join(self._checkpoint_dir, "best_model_Epoch_2_step_2024.0_mAP_0.1784_loss_30.0785_lr_0.0001")
+        checkpoint_path = os.path.join(self._checkpoint_dir, "best_model_Epoch_30_step_21451.0_mAP_0.5711_loss_10.9440_lr_7.827576e-05")
         reader = pywrap_tensorflow.NewCheckpointReader(checkpoint_path)
         var_to_shape_map = reader.get_variable_to_shape_map()
         for layer_name in var_to_shape_map:
             layer_name_weights_dict[layer_name + ':0'] = reader.get_tensor(layer_name)
+        # print('the model dict is', layer_name_weights_dict)
         pruning_factor = self._pruning_factor
         for layer_name, layer_weight in layer_name_weights_dict.items():
             if 'weights' in layer_name:
@@ -157,7 +161,9 @@ class SlimPruning:
                 ####g get bn layer#################
                 current_layer_name = layer_name
                 current_bn_gamma_layer = current_layer_name.replace('weights', 'BatchNorm/gamma')
+                print('current_bn_gamma_layer', current_bn_gamma_layer)
                 current_gamma_layer_weight = layer_name_weights_dict[current_bn_gamma_layer]
+                print('current_gamma_layer_weight', current_gamma_layer_weight)
                 filter_indices_to_prune = self._run_pruning_for_conv2d_layer(pruning_factor, current_gamma_layer_weight)
                 print('filter_indices_to_prune is ', filter_indices_to_prune)
                 W, H, N, nb_channels = layer_weight.shape
@@ -194,9 +200,10 @@ class SlimPruning:
                     next_layer_number = 1
                 if 'darknet' in layer_name:
                     next_layer_name = 'yolov3/darknet53_body/Conv_' + str(next_layer_number) + '/weights:0'
-                elif 'yolo_head' in layer_name:
-                    next_layer_name = 'yolov3/yolo_head/Conv_'+ str(next_layer_number) + '/weights:0'
-
+                elif 'yolov3_head' in layer_name:
+                    next_layer_name = 'yolov3/yolov3_head/Conv_'+ str(next_layer_number) + '/weights:0'
+                else:
+                    next_layer_name = ''
                 if next_layer_number != 52:
                     print("the next layer is ", next_layer_name)
                     ######prune input filter weight######
