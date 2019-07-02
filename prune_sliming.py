@@ -67,7 +67,7 @@ class SlimPruning:
                 # Pruning step
                 print("Running filter pruning {0}".format(pruning_iteration))
                 weight_dict = self._prune_first_stage()
-                sliming_yolo_model = self._reconstruction_model()
+                sliming_yolo_model = self._reconstruction_model(weight_dict)
                 # pruning_iteration += 1
                 # if self._maximum_prune_iterations is not None:
                 #     if pruning_iteration > self._maximum_prune_iterations:
@@ -162,7 +162,10 @@ class SlimPruning:
                 current_layer_name = layer_name
                 current_bn_gamma_layer = current_layer_name.replace('weights', 'BatchNorm/gamma')
                 print('current_bn_gamma_layer', current_bn_gamma_layer)
-                current_gamma_layer_weight = layer_name_weights_dict[current_bn_gamma_layer]
+                try:
+                    current_gamma_layer_weight = layer_name_weights_dict[current_bn_gamma_layer]
+                except:
+                    continue
                 print('current_gamma_layer_weight', current_gamma_layer_weight)
                 filter_indices_to_prune = self._run_pruning_for_conv2d_layer(pruning_factor, current_gamma_layer_weight)
                 print('filter_indices_to_prune is ', filter_indices_to_prune)
