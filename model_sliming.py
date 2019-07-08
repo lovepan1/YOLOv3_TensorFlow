@@ -5,6 +5,7 @@
 from __future__ import division, print_function
 
 import tensorflow as tf
+import numpy as np
 
 slim = tf.contrib.slim
 
@@ -141,53 +142,42 @@ def parse_include_res_darknet53_body_prune_factor(inputs, prune_factor):
     def res_block(inputs, filters, prune_factor):
         shortcut = inputs
         net = conv2d(inputs, np.floor(filters * prune_factor), 1)
-        net = conv2d(net, np.floor(filters * 2 * prune_factor ), 3)
+        net = conv2d(net, filters * 2, 3)
 
         net = net + shortcut
 
-        return net
-
-    def darknet_last_res_block(inputs, filters):
-        shortcut = inputs
-        net = conv2d(inputs, filters, 1)
-        net = conv2d(net, filters *2, 3)
-        net = net + shortcut
         return net
 
     # first two conv2d layers
     net = conv2d(inputs, np.floor(32 * prune_factor), 3, strides=1)
-    net = conv2d(net, np.floor(64 * prune_factor) , 3, strides=2)
+    net = conv2d(net, 64 , 3, strides=2)
 
     # res_block * 1
     net = res_block(net, 32, prune_factor)
 
-    net = conv2d(net, np.floor(128 * prune_factor), 3, strides=2)
+    net = conv2d(net, 128 , 3, strides=2)
 
     # res_block * 2
     for i in range(2):
         net = res_block(net, 64, prune_factor)
 
-    net = conv2d(net, np.floor(256 * prune_factor), 3, strides=2)
+    net = conv2d(net, 256, 3, strides=2)
 
     # res_block * 8
     for i in range(8):
         net = res_block(net, 128, prune_factor)
-    # net = res_block(net, 128, prune_factor=1)
     route_1 = net
-    net = conv2d(net, np.floor(512 * prune_factor), 3, strides=2)
+    net = conv2d(net, 512, 3, strides=2)
 
     # res_block * 8
     for i in range(8):
         net = res_block(net, 256, prune_factor)
-    # net = res_block(net, 256, prune_factor=1)
     route_2 = net
-    net = conv2d(net, np.floor(1024 * prune_factor), 3, strides=2)
+    net = conv2d(net, 1024 , 3, strides=2)
 
     # res_block * 4
     for i in range(4):
         net = res_block(net, 512, prune_factor)
-    # net = darknet_last_res_block(net, 512)
-    # net = conv2d(net, 1024, 1)
     route_3 = net
 
     return route_1, route_2, route_3
@@ -335,27 +325,27 @@ class sliming_yolov3(object):
                     route_1, route_2, route_3 = parse_include_res_darknet53_body_prune_factor(inputs, prune_factor)
 
                 with tf.variable_scope('yolov3_head'):
-                    inter1, net = yolo_block(route_3, 512 * prune_factor)
+                    inter1, net = yolo_block(route_3, np.floor(512*prune_factor))
                     feature_map_1 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
                     feature_map_1 = tf.identity(feature_map_1, name='feature_map_1')
 
-                    inter1 = conv2d(inter1, 256*prune_factor, 1)
+                    inter1 = conv2d(inter1, 256, 1)
                     inter1 = upsample_layer(inter1, tf.shape(route_2))
                     concat1 = tf.concat([inter1, route_2], axis=3)
 
-                    inter2, net = yolo_block(concat1, 256 * prune_factor)
+                    inter2, net = yolo_block(concat1, np.floor(5*prune_factor))
                     feature_map_2 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
                     feature_map_2 = tf.identity(feature_map_2, name='feature_map_2')
 
-                    inter2 = conv2d(inter2, 128*prune_factor, 1)
+                    inter2 = conv2d(inter2, 128, 1)
                     inter2 = upsample_layer(inter2, tf.shape(route_1))
                     concat2 = tf.concat([inter2, route_1], axis=3)
 
-                    _, feature_map_3 = yolo_block(concat2, 128*prune_factor)
+                    _, feature_map_3 = yolo_block(concat2, np.floor(128*prune_factor))
                     feature_map_3 = slim.conv2d(feature_map_3, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
