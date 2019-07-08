@@ -275,7 +275,7 @@ class SlimPruning:
                 next_layer_number = 1
             if 'darknet' in prune_layer:
                 next_layer_name = 'yolov3/darknet53_body/Conv_' + str(next_layer_number) + '/weights:0'
-            if 'yolov3_head' in prune_layer:
+            elif 'yolov3_head' in prune_layer:
                 next_layer_name = 'yolov3/yolov3_head/Conv_' + str(next_layer_number) + '/weights:0'
             else:
                 print(prune_layer)

@@ -335,7 +335,7 @@ class sliming_yolov3(object):
                     inter1 = upsample_layer(inter1, tf.shape(route_2))
                     concat1 = tf.concat([inter1, route_2], axis=3)
 
-                    inter2, net = yolo_block(concat1, np.floor(5*prune_factor))
+                    inter2, net = yolo_block(concat1, np.floor(256*prune_factor))
                     feature_map_2 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
