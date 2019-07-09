@@ -15,8 +15,8 @@ from utils.misc_utils import parse_anchors, read_class_names
 from model_sliming import sliming_yolov3
 
 # from ridurre import base_filter_pruning
-anchor_path = "./data/yolo_anchors.txt"
-class_name_path  = "./data/my_data/dianli_class.names"
+anchor_path = "./data/voc_anchors.txt"
+class_name_path  = "./data/voc.names"
 anchors = parse_anchors(anchor_path)
 num_class = len(read_class_names(class_name_path))
 
@@ -151,12 +151,12 @@ class SlimPruning:
     def _prune_first_stage(self):
         tf_weights_value = []
         layer_name_weights_dict = dict()
-        checkpoint_path = os.path.join(self._checkpoint_dir, "best_model_Epoch_5_step_32381.0_mAP_0.1802_loss_11.9320_lr_9.6e-05")
+        checkpoint_path = os.path.join(self._checkpoint_dir, 'best_model_Epoch_30_step_21451.0_mAP_0.5711_loss_10.9440_lr_7.827576e-05')
         reader = pywrap_tensorflow.NewCheckpointReader(checkpoint_path)
         var_to_shape_map = reader.get_variable_to_shape_map()
         # prune_layer = [0,  2, 6, 9, 13, 16, 19, 22, 25, 28, 31, 34, 38, 41, 44, 47, 50, 53, 56, 59, 63, 66, 69, 72,]
         prune_darknet_layer = [0, 2, 5, 7, 10, 12,14, 16, 18, 20, 22, 24, 27, 29, 31, 33, 35, 37, 39, 41, 44, 46, 48, 50]
-        prune_head_layer = [0, 1, 2, 3, 4, 5,     8, 9, 10, 11, 12, 13,     16, 17, 18, 19, 20, 21   ]
+        prune_head_layer = [0, 1, 2, 3, 4, 5,     8, 9, 10, 11, 12, 13,     16, 17, 18, 19, 20, 21  ]
         layer_prune_name = []
         for i in prune_darknet_layer:
             if i == 0:
@@ -293,6 +293,19 @@ class SlimPruning:
                 print('orignal input shape is ', (W, H, input_channels, nb_channels_2 ))
                 print('prun_input shape is ', layer_name_weights_dict[next_layer_name].shape)
                 # print('calc prune channel input is ', input_channels - len(filter_indices_to_prune))
+            if 'yolov3_head' in prune_layer and next_layer_number in [5, 13]:
+                next_layer_name = 'yolov3/yolov3_head/Conv_' + str(next_layer_number + 2) + '/weights:0'
+                print("yolo the next layer is ", next_layer_name)
+                ######prune input filter weight######
+                # if 'yolov3/darknet53_body/Conv/weights' not in layer_name:  ### cannot prune the first conv
+                next_layer_weight = layer_name_weights_dict[next_layer_name]
+                W, H, input_channels, nb_channels_2 = next_layer_weight.shape
+                prun_input_next_layer_weight = np.delete(next_layer_weight, filter_indices_to_prune, axis=-2)
+                layer_name_weights_dict[next_layer_name] = prun_input_next_layer_weight
+                print('del next layer filter  is ', next_layer_name)
+                print('orignal input shape is ', (W, H, input_channels, nb_channels_2 ))
+                print('prun_input shape is ', layer_name_weights_dict[next_layer_name].shape)
+
         np.save('weights.npy', layer_name_weights_dict)
         return layer_name_weights_dict
 

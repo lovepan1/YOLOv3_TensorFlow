@@ -9,7 +9,7 @@ import numpy as np
 
 slim = tf.contrib.slim
 
-from utils.layer_utils import conv2d, darknet53_body, yolo_block, upsample_layer
+from utils.layer_utils import conv2d, darknet53_body, yolo_block, upsample_layer, yolo_block_pecentage
 
 
 def conv2d(inputs, filters, kernel_size, strides=1):
@@ -325,7 +325,7 @@ class sliming_yolov3(object):
                     route_1, route_2, route_3 = parse_include_res_darknet53_body_prune_factor(inputs, prune_factor)
 
                 with tf.variable_scope('yolov3_head'):
-                    inter1, net = yolo_block(route_3, np.floor(512*prune_factor))
+                    inter1, net = yolo_block_pecentage(route_3, 512, prune_factor)
                     feature_map_1 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
@@ -335,7 +335,7 @@ class sliming_yolov3(object):
                     inter1 = upsample_layer(inter1, tf.shape(route_2))
                     concat1 = tf.concat([inter1, route_2], axis=3)
 
-                    inter2, net = yolo_block(concat1, np.floor(256*prune_factor))
+                    inter2, net = yolo_block_pecentage(concat1, 256, prune_factor)
                     feature_map_2 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
@@ -345,7 +345,7 @@ class sliming_yolov3(object):
                     inter2 = upsample_layer(inter2, tf.shape(route_1))
                     concat2 = tf.concat([inter2, route_1], axis=3)
 
-                    _, feature_map_3 = yolo_block(concat2, np.floor(128*prune_factor))
+                    _, feature_map_3 = yolo_block_pecentage(concat2, 128, prune_factor)
                     feature_map_3 = slim.conv2d(feature_map_3, 3 * (5 + self.class_num), 1,
                                                 stride=1, normalizer_fn=None,
                                                 activation_fn=None, biases_initializer=tf.zeros_initializer())
