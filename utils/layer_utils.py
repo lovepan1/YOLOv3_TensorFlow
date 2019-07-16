@@ -79,6 +79,17 @@ def yolo_block(inputs, filters):
     return route, net
 
 
+def yolo_block_pecentage(inputs, filters, pecentage):
+    import numpy as np
+    net = conv2d(inputs, np.floor(filters * 1 * pecentage), 1)
+    net = conv2d(net,  np.floor(filters * 2 * pecentage), 3)
+    net = conv2d(net,  np.floor(filters * 1 * pecentage), 1)
+    net = conv2d(net,  np.floor(filters * 2 * pecentage), 3)
+    net = conv2d(net, np.floor(filters * 1 * pecentage), 1)
+    route = net
+    net = conv2d(net,  np.floor(filters * 2 * pecentage), 3)
+    return route, net
+
 def upsample_layer(inputs, out_shape):
     new_height, new_width = out_shape[1], out_shape[2]
     # NOTE: here height is the first

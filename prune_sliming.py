@@ -15,8 +15,8 @@ from utils.misc_utils import parse_anchors, read_class_names
 from model_sliming import sliming_yolov3
 
 # from ridurre import base_filter_pruning
-anchor_path = "./data/voc_anchors.txt"
-class_name_path  = "./data/voc.names"
+anchor_path = "./data/yolo_anchors.txt"
+class_name_path  = "./data/my_data/dianli_class.names"
 anchors = parse_anchors(anchor_path)
 num_class = len(read_class_names(class_name_path))
 
@@ -26,8 +26,8 @@ class SlimPruning:
     def __init__(self,
                  pruning_factor: float,
                  nb_finetune_epochs: int,
-                 maximum_prune_iterations: int,
-                 maximum_pruning_percent: float,
+                 # maximum_prune_iterations: int,
+                 # maximum_pruning_percent: float,
                  checkpoint_dir: str,
                  ):
 
@@ -37,9 +37,9 @@ class SlimPruning:
         # self._model_compile_fn = model_compile_fn
         # self._model_finetune_fn = model_finetune_fn
 
-        self._nb_finetune_epochs = nb_finetune_epochs
-        self._maximum_prune_iterations = maximum_prune_iterations
-        self._maximum_pruning_percent = maximum_pruning_percent
+        # self._nb_finetune_epochs = nb_finetune_epochs
+        # self._maximum_prune_iterations = maximum_prune_iterations
+        # self._maximum_pruning_percent = maximum_pruning_percent
 
         self._channel_number_bins = None
         self._pruning_factors_for_channel_bins = None
@@ -53,7 +53,7 @@ class SlimPruning:
         self._restore_part_first = ['yolov3/darknet53_body', 'yolov3/yolov3_head']
         self._restore_part_second = ['yolov3/darknet53_body','yolov3/yolov3_head']
         self._update_part = ['yolov3/yolov3_head']
-        self._img_size = [412, 412]
+        self._img_size = [416, 416]
 
     def run_pruning(self, prune_factor = 0.8,
                     custom_objects_inside_model: dict = None) -> Tuple[models.Model, int]:
@@ -93,13 +93,13 @@ class SlimPruning:
                 sess.run(tf.assign(current_layer_tensor, weight, validate_shape=True))
             print("reconstruction network completed")
             print("completed initialized")
-            saver_to_restore = tf.train.Saver(
-                var_list=tf.contrib.framework.get_variables_to_restore(include=self._restore_part_second))
-            update_vars = tf.contrib.framework.get_variables_to_restore(include=self._update_part)
+            # saver_to_restore = tf.train.Saver(
+            #     var_list=tf.contrib.framework.get_variables_to_restore(include=self._restore_part_second))
+            # update_vars = tf.contrib.framework.get_variables_to_restore(include=self._update_part)
             # saver_to_restore.restore(sess, prune_check_point_path)
             # saver_to_restore.save(sess, os.path.join(self._checkpoint_dir, 'sliming_prune_model.ckpt'))
             saver_best = tf.train.Saver()
-            saver_best.save(sess, os.path.join('./sliming_checkpoint/', 'sliming_prune_model_darknet_yolo_head.ckpt'))
+            saver_best.save(sess, os.path.join('./sliming_checkpoint/', 'no_scale_gamma_sliming_prune_model_darknet_yolo_head.ckpt'))
             return sliming_yolo_model
 
 
@@ -151,8 +151,8 @@ class SlimPruning:
     def _prune_first_stage(self):
         tf_weights_value = []
         layer_name_weights_dict = dict()
-        checkpoint_path = os.path.join(self._checkpoint_dir, 'best_model_Epoch_30_step_21451.0_mAP_0.5711_loss_10.9440_lr_7.827576e-05')
-        reader = pywrap_tensorflow.NewCheckpointReader(checkpoint_path)
+        # checkpoint_path = os.path.join(self._checkpoint_dir, '')
+        reader = pywrap_tensorflow.NewCheckpointReader(self._checkpoint_dir)
         var_to_shape_map = reader.get_variable_to_shape_map()
         # prune_layer = [0,  2, 6, 9, 13, 16, 19, 22, 25, 28, 31, 34, 38, 41, 44, 47, 50, 53, 56, 59, 63, 66, 69, 72,]
         prune_darknet_layer = [0, 2, 5, 7, 10, 12,14, 16, 18, 20, 22, 24, 27, 29, 31, 33, 35, 37, 39, 41, 44, 46, 48, 50]
@@ -246,8 +246,8 @@ class SlimPruning:
             # print("layer_weight.shape is ", layer_weight.shape)
             prune_weight = np.delete(layer_weight, filter_indices_to_prune, axis=-1)
             _, _, _, prun_channel = prune_weight.shape
-            # print('prun_channel is ', prun_channel)
-            # print('calc prune channel is ', nb_channels - len(filter_indices_to_prune))
+            print('prun_channel is ', prun_channel)
+            print('calc prune channel is ', nb_channels - len(filter_indices_to_prune))
             # print("prun weight shape is", prune_weight.shape)
             layer_name_weights_dict[prune_layer] = prune_weight
 
@@ -349,8 +349,8 @@ class SlimPruning:
         x[modify_indices] += self._FUZZ_EPSILON
 
     @staticmethod
-    def _epsilon(self):
-        return BasePruning._FUZZ_EPSILON
+    # def _epsilon(self):
+    #     return BasePruning._FUZZ_EPSILON
 
     def _calculate_number_of_channels_to_keep(self, keep_factor: float, nb_of_channels: int):
         # This is the number of channels we would like to keep
@@ -418,6 +418,17 @@ class SlimPruning:
     def _load_back_saved_model(self, custom_objects: dict) -> models.Model:
         model = models.load_model(self._tmp_model_file_name, custom_objects=custom_objects)
         return model
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+sliming_model = SlimPruning(pruning_factor=0.8,
+                 nb_finetune_epochs=10,
+                 # maximum_prune_iterations=10,
+                 # maximum_pruning_percent=0.5,
+                 # checkpoint_dir="./checkpoint/best_model_Epoch_1_step_6859.0_mAP_0.1775_loss_30.3245_lr_1e-05")
+                    checkpoint_dir="./checkpoint/best_model_Epoch_2_step_2024.0_mAP_0.1784_loss_30.0785_lr_0.0001")
+model, prune_weights_dict = sliming_model.run_pruning()
+# sliming_model._reconstruction_model(prune_weights_dict)
+
 
 
 
