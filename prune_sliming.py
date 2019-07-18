@@ -25,6 +25,7 @@ class SlimPruning:
 
     def __init__(self,
                  pruning_factor: float,
+                 prune_iter_cnt: int,
                  nb_finetune_epochs: int,
                  # maximum_prune_iterations: int,
                  # maximum_pruning_percent: float,
@@ -43,7 +44,7 @@ class SlimPruning:
 
         self._channel_number_bins = None
         self._pruning_factors_for_channel_bins = None
-
+        self._prune_iter_cnt = prune_iter_cnt
         self._original_number_of_filters = -1
 
         self._checkpoint_dir = checkpoint_dir
@@ -84,7 +85,7 @@ class SlimPruning:
             with tf.variable_scope('yolov3'):
                 pred_feature_maps = sliming_yolo_model.forward_include_res_with_prune_factor(input_data_2,
                                                                                           prune_factor=self._pruning_factor,
-                                                                                          is_training=True)
+                                                                                          is_training=True, prune_cnt=self._prune_iter_cnt)
             sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
             for layer_name, weight in weight_dict.items():
                 print(layer_name)
@@ -99,14 +100,15 @@ class SlimPruning:
             # saver_to_restore.restore(sess, prune_check_point_path)
             # saver_to_restore.save(sess, os.path.join(self._checkpoint_dir, 'sliming_prune_model.ckpt'))
             saver_best = tf.train.Saver()
-            saver_best.save(sess, os.path.join('./sliming_checkpoint/', 'no_scale_gamma_sliming_prune_model_darknet_yolo_head.ckpt'))
+            saver_best.save(sess, os.path.join('./sliming_checkpoint/', 'sliming_prune_model_darknet_yolo_head_third.ckpt'))
             return sliming_yolo_model
 
 
 
 
     def _run_pruning_for_conv2d_layer(self, pruning_factor: float, gamma_layer_weight_mtx):
-        _nb_channels = gamma_layer_weight_mtx.shape
+        import operator
+        _nb_channels = gamma_layer_weight_mtx.shape[0]
         abs_weight = list(map(abs, gamma_layer_weight_mtx))
         sorted_weight = np.sort(abs_weight)
         # print('curent is sorted_weight', sorted_weight)
@@ -127,21 +129,40 @@ class SlimPruning:
         channel_indices_to_keep = list(channel_indices_to_keep)
         # print('prune ind is ', channel_indices_to_prune)
         nb_of_clusters = len(save_indices)
-        if len(channel_indices_to_keep) > nb_of_clusters:
+        saved_prune_channel = int(np.floor(self._pruning_factor * _nb_channels))
+        print('true saved channel is ', nb_of_clusters)
+        print('calc saved channel is ', saved_prune_channel)
+        if len(channel_indices_to_keep) < saved_prune_channel:
             print("Number of selected channels for pruning is less than expected")
-            diff = len(channel_indices_to_keep) - nb_of_clusters
+            bn_weights_key = dict()
+            diff = saved_prune_channel - len(channel_indices_to_keep)
             print("Randomly adding {0} channels for pruning".format(diff))
-            np.random.shuffle(channel_indices_to_keep)
-            for i in range(diff):
-                channel_indices_to_prune.append(channel_indices_to_keep.pop(i))
-        elif len(channel_indices_to_keep) < nb_of_clusters:
+            for i in range(len(channel_indices_to_prune)):
+                bn_weights_key[channel_indices_to_prune[i]] = abs_weight[channel_indices_to_prune[i]]
+            sorted(bn_weights_key.items(), key=lambda item: item[1], reverse=True)
+            keys = list(bn_weights_key.keys())
+            for j in range(diff):
+                channel_indices_to_keep.append(keys[j])
+                channel_indices_to_prune.pop(keys[j])
+            # np.random.shuffle(channel_indices_to_keep)
+            # for i in range(diff):
+            #     channel_indices_to_prune.append(channel_indices_to_keep.pop(i))
+        elif len(channel_indices_to_keep) > saved_prune_channel:
             print("Number of selected channels for pruning is greater than expected. Leaving too few channels.")
-            diff = nb_of_clusters - len(channel_indices_to_keep)
+            diff = len(channel_indices_to_keep) - saved_prune_channel
             print("Discarding {0} pruneable channels".format(diff))
-            for i in range(diff):
-                channel_indices_to_keep.append(channel_indices_to_prune.pop(i))
+            bn_weights_key_2 = dict()
+            for i in range(len(channel_indices_to_keep)):
+                bn_weights_key_2[channel_indices_to_keep[i]] = abs_weight[channel_indices_to_keep[i]]
+            sorted(bn_weights_key_2.items(), key=lambda item: item[1])
+            keys = list(bn_weights_key_2.keys())
+            for j in range(diff):
+                channel_indices_to_prune.append(keys[j])
+                channel_indices_to_keep.pop(keys[j])
+            # for i in range(diff):
+            #     channel_indices_to_keep.append(channel_indices_to_prune.pop(i))
 
-        if len(channel_indices_to_keep) != nb_of_clusters:
+        if len(channel_indices_to_keep) != saved_prune_channel:
             raise ValueError(
                 "Number of clusters {0} is not equal with the selected "
                 "pruneable channels {1}".format(nb_of_clusters, len(channel_indices_to_prune)))
@@ -420,13 +441,31 @@ class SlimPruning:
         return model
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# ########################### first prune pecentage=0.8 ###########################
+# sliming_model = SlimPruning(pruning_factor=0.8,
+#                  nb_finetune_epochs=10,
+#                  prune_iter_cnt=1,
+#                  # maximum_prune_iterations=10,
+#                  # maximum_pruning_percent=0.5,
+#                  checkpoint_dir="./checkpoint/best_model_Epoch_1_step_6859.0_mAP_0.1775_loss_30.3245_lr_1e-05")
+# model, prune_weights_dict = sliming_model.run_pruning()
+# #################################################################################
+
+########################### second prune pecentage=0.8 ###########################
+# sliming_model = SlimPruning(pruning_factor=0.8,
+#                  nb_finetune_epochs=10,
+#                  prune_iter_cnt=2,
+#                  checkpoint_dir="./scale_gamma_checkpoint/best_model_Epoch_0_step_3429.0_mAP_0.1628_loss_21.8372_lr_0.0001")
+# model, prune_weights_dict = sliming_model.run_pruning()
+#################################################################################
+
+########################### third prune pecentage=0.8 ###########################
 sliming_model = SlimPruning(pruning_factor=0.8,
                  nb_finetune_epochs=10,
-                 # maximum_prune_iterations=10,
-                 # maximum_pruning_percent=0.5,
-                 # checkpoint_dir="./checkpoint/best_model_Epoch_1_step_6859.0_mAP_0.1775_loss_30.3245_lr_1e-05")
-                    checkpoint_dir="./checkpoint/best_model_Epoch_2_step_2024.0_mAP_0.1784_loss_30.0785_lr_0.0001")
+                 prune_iter_cnt=3,
+                 checkpoint_dir="./scale_gamma_checkpoint/best_model_Epoch_0_step_3429.0_mAP_0.0551_loss_26.1699_lr_0.0001")
 model, prune_weights_dict = sliming_model.run_pruning()
+#################################################################################
 # sliming_model._reconstruction_model(prune_weights_dict)
 
 

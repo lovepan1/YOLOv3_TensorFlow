@@ -79,15 +79,30 @@ def yolo_block(inputs, filters):
     return route, net
 
 
-def yolo_block_pecentage(inputs, filters, pecentage):
+def yolo_block_pecentage(inputs, filters, pecentage, prune_cnt=1):
     import numpy as np
-    net = conv2d(inputs, np.floor(filters * 1 * pecentage), 1)
-    net = conv2d(net,  np.floor(filters * 2 * pecentage), 3)
-    net = conv2d(net,  np.floor(filters * 1 * pecentage), 1)
-    net = conv2d(net,  np.floor(filters * 2 * pecentage), 3)
-    net = conv2d(net, np.floor(filters * 1 * pecentage), 1)
+    true_filters_1 = filters
+    true_filters_2 = filters * 2
+    for i in range(prune_cnt):
+        true_filters_1 = np.floor(true_filters_1 * pecentage)
+        true_filters_2 = np.floor(true_filters_2 * pecentage)
+
+    # net = conv2d(inputs, np.floor(filters * 1 * pow(pecentage, prune_cnt)), 1)
+    # net = conv2d(net,  np.floor(filters * 2 * pow(pecentage, prune_cnt)), 3)
+    # net = conv2d(net,  np.floor(filters * 1 * pow(pecentage, prune_cnt)), 1)
+    # net = conv2d(net,  np.floor(filters * 2 * pow(pecentage, prune_cnt)), 3)
+    # net = conv2d(net, np.floor(filters * 1 * pow(pecentage, prune_cnt)), 1)
+    # route = net
+    # net = conv2d(net,  np.floor(filters * 2 * pow(pecentage, prune_cnt)), 3)
+
+    net = conv2d(inputs, true_filters_1 , 1)
+    net = conv2d(net,  true_filters_2, 3)
+    net = conv2d(net,  true_filters_1, 1)
+    net = conv2d(net,  true_filters_2, 3)
+    net = conv2d(net, true_filters_1, 1)
     route = net
-    net = conv2d(net,  np.floor(filters * 2 * pecentage), 3)
+    net = conv2d(net,  true_filters_2, 3)
+
     return route, net
 
 def upsample_layer(inputs, out_shape):

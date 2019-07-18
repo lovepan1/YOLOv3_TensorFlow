@@ -13,7 +13,8 @@ from utils.plot_utils import get_color_table, plot_one_box
 import datetime
 from model import yolov3
 # from pruning_model import parse_darknet53_body
-from pruning_model import sparse_yolov3
+# from pruning_model import sparse_yolov3
+from model_sliming import sliming_yolov3
 
 parser = argparse.ArgumentParser(description="YOLO-V3 test single image test procedure.")
 parser.add_argument("--input_image_dir", type=str,default = "./img_dir",
@@ -24,7 +25,9 @@ parser.add_argument("--new_size", nargs='*', type=int, default=[416, 416],
                     help="Resize the input image with `new_size`, size format: [width, height]")
 parser.add_argument("--class_name_path", type=str, default="./data/my_data/dianli_class.names",
                     help="The path of the class names.")
-parser.add_argument("--restore_path", type=str, default='/home/pcl/tensorflow1.12/YOLOv3_TensorFlow/checkpoint/best_model_Epoch_2_step_2024.0_mAP_0.1784_loss_30.0785_lr_0.0001',
+# parser.add_argument("--restore_path", type=str, default='/home/pcl/tensorflow1.12/shangYong_yolov3/sliming_checkpoint/no_scale_gamma_sliming_prune_model_darknet_yolo_head.ckpt',
+#                     help="The path of the weights to restore.")
+parser.add_argument("--restore_path", type=str, default='/home/pcl/tensorflow1.12/shangYong_yolov3/checkpoint/second_prune_best_model_Epoch_16_step_58309.0_mAP_0.1885_loss_25.0688_lr_8.847359e-05',
                     help="The path of the weights to restore.")
 args = parser.parse_args()
 
@@ -35,26 +38,26 @@ args.num_class = len(args.classes)
 color_table = get_color_table(args.num_class)
 
 with tf.Session() as sess:
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     input_data = tf.placeholder(tf.float32, [1, args.new_size[1], args.new_size[0], 3], name='input_data')
-    '''
-    frozen feature map pb model for yolov3, but pb model exclude post process, nms process, because of huawei a200 required post process must added in pb model,so i create another pb model
-    '''
-    ########################################################################################
-    yolo_model = yolov3(args.num_class, args.anchors)
-    with tf.variable_scope('yolov3'):
-        pred_feature_maps = yolo_model.forward(input_data, False)
-    pred_boxes, pred_confs, pred_probs = yolo_model.predict(pred_feature_maps)
-
-    pred_scores = pred_confs * pred_probs
-
-    boxes, scores, labels = gpu_nms(pred_boxes, pred_scores, args.num_class, max_boxes=30, score_thresh=0.4, nms_thresh=0.5)
-
-    saver = tf.train.Saver()
-    saver.restore(sess, args.restore_path)
-    constant_graph = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def, ["yolov3/yolov3_head/feature_map_1", "yolov3/yolov3_head/feature_map_2", "yolov3/yolov3_head/feature_map_3"])
-    with tf.gfile.FastGFile("./yolo_myself_darknet53.pb", mode='wb') as f:
-        f.write(constant_graph.SerializeToString())
+    # '''
+    # frozen feature map pb model for yolov3, but pb model exclude post process, nms process, because of huawei a200 required post process must added in pb model,so i create another pb model
+    # '''
+    ################################### orignal model #######################################
+    # yolo_model = yolov3(args.num_class, args.anchors)
+    # with tf.variable_scope('yolov3'):
+    #     pred_feature_maps = yolo_model.forward(input_data, False)
+    # pred_boxes, pred_confs, pred_probs = yolo_model.predict(pred_feature_maps)
+    #
+    # pred_scores = pred_confs * pred_probs
+    #
+    # boxes, scores, labels = gpu_nms(pred_boxes, pred_scores, args.num_class, max_boxes=30, score_thresh=0.4, nms_thresh=0.5)
+    #
+    # saver = tf.train.Saver()
+    # saver.restore(sess, args.restore_path)
+    # constant_graph = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def, ["yolov3/yolov3_head/feature_map_1", "yolov3/yolov3_head/feature_map_2", "yolov3/yolov3_head/feature_map_3"])
+    # with tf.gfile.FastGFile("./yolo_myself_darknet53.pb", mode='wb') as f:
+    #     f.write(constant_graph.SerializeToString())
     #########################################################################################
     '''
     darknet53 ckpt file -> darknet53 pb file 
@@ -99,12 +102,31 @@ with tf.Session() as sess:
     # with tf.gfile.FastGFile("./yolo_myself_prun_include_res.pb", mode='wb') as f:
     #     f.write(constant_graph.SerializeToString())
 
+    # '''
+    # frozen feature map pb model for yolov3, but pb model exclude post process, nms process, because of huawei a200 required post process must added in pb model,so i create another pb model
+    # '''
+    ################################### orignal model #######################################
+    yolo_model = sliming_yolov3(args.num_class, args.anchors)
+    with tf.variable_scope('yolov3'):
+        pred_feature_maps = yolo_model.forward_include_res_with_prune_factor(input_data, 0.8, prune_cnt=2)
+    pred_boxes, pred_confs, pred_probs = yolo_model.predict(pred_feature_maps)
+
+    pred_scores = pred_confs * pred_probs
+
+    boxes, scores, labels = gpu_nms(pred_boxes, pred_scores, args.num_class, max_boxes=30, score_thresh=0.4, nms_thresh=0.5)
+
+    saver = tf.train.Saver()
+    saver.restore(sess, args.restore_path)
+    constant_graph = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def, ["yolov3/yolov3_head/feature_map_1", "yolov3/yolov3_head/feature_map_2", "yolov3/yolov3_head/feature_map_3"])
+    # with tf.gfile.FastGFile("./second_sliming_yolov3_darknet_yolohead_map_0.1885.pb", mode='wb') as f:
+    #     f.write(constant_graph.SerializeToString())
+    #########################################################################################
 
     img_list = os.listdir(args.input_image_dir)
     print(args.input_image_dir)
-    for i in img_list:
-        print(i)
-        img_dir = os.path.join(args.input_image_dir, i)
+    for m in img_list:
+        print(m)
+        img_dir = os.path.join(args.input_image_dir, m)
         # img = cv2.imread(img_dir)
         # img_ori_list
         img_ori = cv2.imread(img_dir)
@@ -116,10 +138,10 @@ with tf.Session() as sess:
         starttime = datetime.datetime.now()
         boxes_, scores_, labels_ = sess.run([boxes, scores, labels], feed_dict={input_data: img})
         # boxes_extract_pb, scores_extract_pb, lables_extract_pb = sess.run(output_tensors, feed_dict={input_data: img})
-        print("boxes_, scores_, labels is ", boxes_, scores_, labels_)
         # print("boxes_extract_pb, scores_extract_pb, lables_extract_pb", boxes_extract_pb, scores_extract_pb, lables_extract_pb)
         endtime = datetime.datetime.now()
         print("sess cost time is ", endtime - starttime)
+        print("boxes_, scores_, labels is ", boxes_, scores_, labels_)
     # rescale the coordinates to the original image
         boxes_[:, 0] *= (width_ori/float(args.new_size[0]))
         boxes_[:, 2] *= (width_ori/float(args.new_size[0]))
@@ -138,5 +160,6 @@ with tf.Session() as sess:
             x0, y0, x1, y1 = boxes_[i]
             plot_one_box(img_ori, [x0, y0, x1, y1], label=args.classes[labels_[i]], color=color_table[labels_[i]])
     # cv2.imshow('Detection result', img_ori)
-    cv2.imwrite('detection_result.jpg', img_ori)
-    cv2.waitKey(0)
+        print('i is')
+        cv2.imwrite('./results/' + str(m), img_ori)
+    # cv2.waitKey(0)

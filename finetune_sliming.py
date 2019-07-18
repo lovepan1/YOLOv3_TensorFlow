@@ -78,8 +78,21 @@ for y in y_true:
 # y_pred = yolo_model.predict(pred_feature_maps)
 
 yolo_model = sliming_yolov3(args.class_num, args.anchors, args.use_label_smooth, args.use_focal_loss, args.batch_norm_decay, args.weight_decay)
+############################## first prune #################################################################################
+# with tf.variable_scope('yolov3'):
+#     pred_feature_maps = yolo_model.forward_include_res_with_prune_factor(image, prune_factor=0.8, is_training=is_training)
+############################################################################################################################
+
+# ############################## second prune #################################################################################
+# with tf.variable_scope('yolov3'):
+#     pred_feature_maps = yolo_model.forward_include_res_with_prune_factor(image, prune_factor=0.8, is_training=is_training, prune_cnt=2)
+# ############################################################################################################################
+
+############################## third prune #################################################################################
 with tf.variable_scope('yolov3'):
-    pred_feature_maps = yolo_model.forward_include_res_with_prune_factor(image, prune_factor=0.8, is_training=is_training)
+    pred_feature_maps = yolo_model.forward_include_res_with_prune_factor(image, prune_factor=0.8, is_training=is_training, prune_cnt=3)
+############################################################################################################################
+
 loss = yolo_model.compute_loss(pred_feature_maps, y_true)
 y_pred = yolo_model.predict(pred_feature_maps)
 l2_loss = tf.losses.get_regularization_loss()
@@ -169,7 +182,7 @@ with tf.control_dependencies(update_ops):
 
 with tf.Session() as sess:
     sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
-    saver_to_restore.restore(sess, '/home/pcl/tensorflow1.12/shangYong_yolov3/sliming_checkpoint/sliming_prune_model_darknet_yolo_head.ckpt')
+    saver_to_restore.restore(sess, '/home/pcl/tensorflow1.12/shangYong_yolov3/sliming_checkpoint/sliming_prune_model_darknet_yolo_head_third.ckpt')
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter(args.log_dir, sess.graph)
 

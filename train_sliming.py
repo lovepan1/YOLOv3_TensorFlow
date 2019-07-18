@@ -69,19 +69,42 @@ for y in y_true:
 ##################
 # Model definition
 ##################
-yolo_model = yolov3(args.class_num, args.anchors, args.use_label_smooth, args.use_focal_loss, args.batch_norm_decay, args.weight_decay)
+from model_sliming import sliming_yolov3
+#################### first scale gamma #################################################################################################
+# yolo_model = yolov3(args.class_num, args.anchors, args.use_label_smooth, args.use_focal_loss, args.batch_norm_decay, args.weight_decay)
+# with tf.variable_scope('yolov3'):
+#     pred_feature_maps = yolo_model.forward(image, is_training=is_training)
+# loss = yolo_model.compute_loss(pred_feature_maps, y_true)
+# y_pred = yolo_model.predict(pred_feature_maps)
+########################################################################################################################################
+
+#################### second and other scale gamma ######################################################################################
+# pruning_factor = 0.8
+# sliming_yolo_model = sliming_yolov3(args.class_num, args.anchors, args.use_label_smooth, args.use_focal_loss, args.batch_norm_decay, args.weight_decay)
+# with tf.variable_scope('yolov3'):
+#     pred_feature_maps = sliming_yolo_model.forward_include_res_with_prune_factor(image,
+#                                                                               prune_factor=pruning_factor,
+#                                                                               is_training=is_training)
+# loss = sliming_yolo_model.compute_loss(pred_feature_maps, y_true)
+# y_pred = sliming_yolo_model.predict(pred_feature_maps)
+########################################################################################################################################
+
+#################### third and other scale gamma ######################################################################################
+pruning_factor = 0.8
+sliming_yolo_model = sliming_yolov3(args.class_num, args.anchors, args.use_label_smooth, args.use_focal_loss, args.batch_norm_decay, args.weight_decay)
 with tf.variable_scope('yolov3'):
-    pred_feature_maps = yolo_model.forward(image, is_training=is_training)
-loss = yolo_model.compute_loss(pred_feature_maps, y_true)
-y_pred = yolo_model.predict(pred_feature_maps)
+    pred_feature_maps = sliming_yolo_model.forward_include_res_with_prune_factor(image,
+                                                                              prune_factor=pruning_factor,
+                                                                              is_training=is_training, prune_cnt=2)
+loss = sliming_yolo_model.compute_loss(pred_feature_maps, y_true)
+y_pred = sliming_yolo_model.predict(pred_feature_maps)
+########################################################################################################################################
 
 l2_loss = tf.losses.get_regularization_loss()
 
 # setting restore parts and vars to update
-sliming_restore_part = ['yolov3/darknet53_body','yolov3/yolov3_head']
-sliming_update_part = ['yolov3/darknet53_body','yolov3/yolov3_head']
-saver_to_restore = tf.train.Saver(var_list=tf.contrib.framework.get_variables_to_restore(include=sliming_restore_part))
-update_vars = tf.contrib.framework.get_variables_to_restore(include=sliming_update_part)
+saver_to_restore = tf.train.Saver(var_list=tf.contrib.framework.get_variables_to_restore(include=args.restore_part))
+update_vars = tf.contrib.framework.get_variables_to_restore(include=args.update_part)
 
 tf.summary.scalar('train_batch_statistics/total_loss', loss[0])
 tf.summary.scalar('train_batch_statistics/loss_xy', loss[1])
@@ -104,12 +127,45 @@ if not args.save_optimizer:
     saver_to_save = tf.train.Saver()
     saver_best = tf.train.Saver()
 
-gamma_loss = 0
+optimizer = config_optimizer(args.optimizer_name, learning_rate)
+
+# if args.save_optimizer:
+#     saver_to_save = tf.train.Saver()
+#     saver_best = tf.train.Saver()
+
+gamma_loss = dict()
+prune_darknet_layer = [0, 2, 5, 7, 10, 12, 14, 16, 18, 20, 22, 24, 27, 29, 31, 33, 35, 37, 39, 41, 44, 46, 48, 50]
+prune_head_layer = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21]
+
 for var in tf.global_variables():
-    var_name_type = var.name.split('/')[-1][:-2]
-    if var_name_type == 'gamma':
-        gamma_abs = tf.abs(var)
-        gamma_loss += args.gamma * tf.reduce_sum(gamma_abs)
+    # var_name_type = var.name.split('/')[-1][:-2]
+    current_layer_type = var.name
+    try:
+        idx = int(current_layer_type.split('/')[-3].split('_')[-1])
+    except:
+        idx = 0
+    if ('darknet' in current_layer_type and idx in prune_darknet_layer and 'gamma' in current_layer_type) or ('yolov3_head' in current_layer_type and idx in prune_head_layer  and 'gamma' in current_layer_type):
+        tf.summary.histogram(name=current_layer_type.replace(':0', ''), values=var)
+    # if 'darknet' in var.name:
+    #     try:
+    #         layer_id = int(var.name.split('/')[2][-1])
+    #         current_layer_tf = 'yolov3/darknet53_body/Conv_' + str(layer_id) + '/weights:0'
+    #     except:
+    #         layer_id = 0
+    #         current_layer_tf = 'yolov3/darknet53_body/Conv/weights:0'
+    # if 'yolov3_head' in var.name:
+    #     try:
+    #         layer_id = int(var.name.split('/')[2][-1])
+    #         current_layer_tf = 'yolov3/yolov3_head/Conv_' + str(layer_id) + '/weights:0'
+    #     except:
+    #         layer_id = 0
+    #         current_layer_tf = 'yolov3/yolov3_head/Conv/weights:0'
+    #
+    # if var_name_type == 'gamma' and 'darknet' in var.name:
+    #     gamma = tf.constant(1e-4, shape=var.shape())
+        # gamma_loss[current_layer_tf] = tf.multiply(gamma, current_layer_tf)
+        # gamma_abs = tf.abs(var)
+        # gamma_loss += gamma * tf.reduce_sum(gamma_abs)
 
 if args.save_optimizer:
     saver_to_save = tf.train.Saver()
@@ -118,33 +174,50 @@ if args.save_optimizer:
 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 with tf.control_dependencies(update_ops):
     optimizer = config_optimizer(args.optimizer_name, learning_rate)
-    grads_varlist = optimizer.compute_gradients(loss[0] + l2_loss + gamma_loss, var_list=update_vars)
+    grads_varlist = optimizer.compute_gradients(loss[0] + l2_loss, var_list=update_vars)
     for i, (g, v) in enumerate(grads_varlist):
+        # print('g is ', g)
+        # print('v is ', v)
         if g is not None:
-            grads_varlist[i] = (tf.clip_by_norm(g, 20), v)
-            # print('grads is caijian')
-    # if args.sliming:
-    #     for i, (g, v) in enumerate(grads_varlist):
-    #         if g is not None:
-    #             if 'gamma' in str(v):
-    #                 print(v)
-    #                 grads_varlist[i] += args.sliming * np.linalg.norm(sess.run(v))
-    #                 print('layer_grads shape is ',grads_varlist[i][0].shape)
-    #                 print("gamma loss is ", args.gamma * np.linalg.norm(sess.run(v)) )
-    # grad = tf.gradients(loss_fintune[0], update_vars_finetune)
+            grads_varlist[i] = (tf.clip_by_norm(g, 100), v)
+            if 'darknet' in v.name and 'gamma' in v.name:
+                # print(v.name) yolov3/darknet53_body/Conv_51/BatchNorm/gamma:0
+                try:
+                    layer_id = int(v.name.split('/')[-3].split('_')[-1])
+                    # current_layer_tf = 'yolov3/darknet53_body/Conv_' + str(layer_id) + '/weights:0'
+                except:
+                    layer_id = 0
+                if layer_id in prune_darknet_layer:
+                    # gamma = tf.constant(value=1e-4, shape=v.shape)
+                    gamma = 1e-4
+                    gamma_loss = tf.multiply(gamma, v)
+                    grads_varlist[i] = (tf.add(g, tf.sign(gamma_loss)) , v)
+            if 'yolov3_head' in v.name and 'gamma' in v.name:
+                try:
+                    layer_id = int(v.name.split('/')[-3].split('_')[-1])
+                except:
+                    layer_id = 0
+                if layer_id in prune_head_layer:
+                    # gamma = tf.constant(value=1e-4, shape=v.shape)
+                    gamma = 1e-4
+                    gamma_loss = tf.multiply(gamma, v)
+                    grads_varlist[i] = (tf.add(g, tf.sign(gamma_loss)), v)
     train_op = optimizer.apply_gradients(grads_varlist, global_step=global_step)
     # train_op = optimizer.minimize(loss[0] + l2_loss, var_list=update_vars, global_step=global_step)
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-with tf.Session(config=config) as sess:
-    sess = tf.Session()
+# set dependencies for BN ops
+# update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+# with tf.control_dependencies(update_ops):
+#     train_op = optimizer.minimize(loss[0] + l2_loss, var_list=update_vars, global_step=global_step)
+
+with tf.Session() as sess:
     sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
-    saver_to_restore.restore(sess, args.restore_path)
+    saver_to_restore.restore(sess, '/home/pcl/tensorflow1.12/shangYong_yolov3/checkpoint/second_prune_best_model_Epoch_16_step_58309.0_mAP_0.1885_loss_25.0688_lr_8.847359e-05')
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter(args.log_dir, sess.graph)
 
     print('\n----------- start to train -----------\n')
+
     best_mAP = -np.Inf
 
     for epoch in range(args.total_epoches):
@@ -156,10 +229,6 @@ with tf.Session(config=config) as sess:
             _, summary, __y_pred, __y_true, __loss, __global_step, __lr = sess.run(
                 [train_op, merged, y_pred, y_true, loss, global_step, learning_rate],
                 feed_dict={is_training: True})
-            try:
-                __gamma_loss = sess.run(gamma_loss, feed_dict={is_training: True})
-            except:
-                print('gamma loss failed ')
 
             writer.add_summary(summary, global_step=__global_step)
 
@@ -174,37 +243,26 @@ with tf.Session(config=config) as sess:
                 recall, precision = evaluate_on_gpu(sess, gpu_nms_op, pred_boxes_flag, pred_scores_flag, __y_pred, __y_true, args.class_num, args.eval_threshold)
 
                 info = "Epoch: {}, global_step: {} | loss: total: {:.2f}, xy: {:.2f}, wh: {:.2f}, conf: {:.2f}, class: {:.2f} | ".format(
-                        epoch, int(__global_step), loss_total.average, loss_xy.average, loss_wh.average, loss_conf.average, loss_class.average)
+                        epoch, int(__global_step), loss_total.avg, loss_xy.avg, loss_wh.avg, loss_conf.avg, loss_class.avg)
                 info += 'Last batch: rec: {:.3f}, prec: {:.3f} | lr: {:.5g}'.format(recall, precision, __lr)
                 print(info)
-                try:
-                    print('gamma_loss is', __gamma_loss)
-                except:
-                    print('gamma loss failed ')
                 logging.info(info)
 
                 writer.add_summary(make_summary('evaluation/train_batch_recall', recall), global_step=__global_step)
                 writer.add_summary(make_summary('evaluation/train_batch_precision', precision), global_step=__global_step)
 
-                if np.isnan(loss_total.average):
+                if np.isnan(loss_total.last_avg):
                     print('****' * 10)
                     raise ArithmeticError(
                         'Gradient exploded! Please train again and you may need modify some parameters.')
 
-        tmp_total_loss = loss_total.average
-        loss_total.reset()
-        loss_xy.reset()
-        loss_wh.reset()
-        loss_conf.reset()
-        loss_class.reset()
-
         # NOTE: this is just demo. You can set the conditions when to save the weights.
-        # if epoch % args.save_epoch == 0 and epoch > 0:
-        #     if tmp_total_loss <= 2.:
-        #         saver_to_save.save(sess, args.save_dir + 'model-epoch_{}_step_{}_loss_{:.4f}_lr_{:.5g}'.format(epoch, int(__global_step), loss_total.last_avg, __lr))
+        if epoch % args.save_epoch == 0 and epoch > 0:
+            if loss_total.last_avg <= 2.:
+                saver_to_save.save(sess, args.save_dir + 'model-epoch_{}_step_{}_loss_{:.4f}_lr_{:.5g}'.format(epoch, int(__global_step), loss_total.last_avg, __lr))
 
         # switch to validation dataset for evaluation
-        if epoch % args.val_evaluation_epoch == 0 and epoch > 0:
+        if epoch % args.val_evaluation_epoch == 0:
             sess.run(val_init_op)
 
             val_loss_total, val_loss_xy, val_loss_wh, val_loss_conf, val_loss_class = \
@@ -242,10 +300,15 @@ with tf.Session(config=config) as sess:
                 val_loss_total.avg, val_loss_xy.avg, val_loss_wh.avg, val_loss_conf.avg, val_loss_class.avg)
             print(info)
             logging.info(info)
+            ################### just train one epoch and save ###################################################################
+            saver_best.save(sess,
+                            './scale_gamma_checkpoint/' + 'best_model_Epoch_{}_step_{}_mAP_{:.4f}_loss_{:.4f}_lr_{:.7g}'.format(
+                                epoch, __global_step, best_mAP, val_loss_total.last_avg, __lr))
+            ######################################################################################################################
 
             if mAP > best_mAP:
                 best_mAP = mAP
-                saver_best.save(sess, args.save_dir + 'best_model_Epoch_{}_step_{}_mAP_{:.4f}_loss_{:.4f}_lr_{:.7g}'.format(
+                saver_best.save(sess, './scale_gamma_checkpoint/' + 'best_model_Epoch_{}_step_{}_mAP_{:.4f}_loss_{:.4f}_lr_{:.7g}'.format(
                                    epoch, __global_step, best_mAP, val_loss_total.last_avg, __lr))
 
             writer.add_summary(make_summary('evaluation/val_mAP', mAP), global_step=epoch)
