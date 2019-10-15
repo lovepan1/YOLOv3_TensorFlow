@@ -11,6 +11,7 @@ slim = tf.contrib.slim
 from utils.layer_utils import conv2d, darknet53_body, yolo_block, upsample_layer
 from utils.layer_utils import *
 from utils.nms_utils import gpu_nms
+from utils.layer_mobilenet_utils import darknet53_mobilenet_body, conv_block_mobilet, yolo_block_mobilenet
 import args
 
 
@@ -44,7 +45,7 @@ class mobilenet_yolov3(object):
         with tf.variable_scope('darknet53_mobilenet_body'):
             route_1, route_2, route_3 = darknet53_mobilenet_body(inputs, net_type='mobilenet_v1')
         with tf.variable_scope('yolov3_head'):
-            inter1, net = yolo_block(route_3, 512)
+            inter1, net = yolo_block_mobilenet(route_3, 512, net_type='mobilenet_v1')
             feature_map_1 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                         stride=1, normalizer_fn=None,
                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
@@ -54,7 +55,7 @@ class mobilenet_yolov3(object):
             inter1 = upsample_layer(inter1, tf.shape(route_2))
             concat1 = tf.concat([inter1, route_2], axis=3)
 
-            inter2, net = yolo_block(concat1, 256)
+            inter2, net = yolo_block_mobilenet(concat1, 256, net_type='mobilenet_v1')
             feature_map_2 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                         stride=1, normalizer_fn=None,
                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
@@ -64,49 +65,12 @@ class mobilenet_yolov3(object):
             inter2 = upsample_layer(inter2, tf.shape(route_1))
             concat2 = tf.concat([inter2, route_1], axis=3)
 
-            _, feature_map_3 = yolo_block(concat2, 128)
+            _, feature_map_3 = yolo_block_mobilenet(concat2, 128, net_type='mobilenet_v1')
             feature_map_3 = slim.conv2d(feature_map_3, 3 * (5 + self.class_num), 1,
                                         stride=1, normalizer_fn=None,
                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
             feature_map_3 = tf.identity(feature_map_3, name='feature_map_3')
-        # with slim.arg_scope([slim.conv2d, slim.batch_norm], reuse=reuse):
-        #     with slim.arg_scope([slim.conv2d],
-        #                         normalizer_fn=slim.batch_norm,
-        #                         normalizer_params=batch_norm_params,
-        #                         biases_initializer=None,
-        #                         activation_fn=lambda x: tf.nn.leaky_relu(x, alpha=0.1),
-        #                         weights_regularizer=slim.l2_regularizer(self.weight_decay)):
-        #         with tf.variable_scope('darknet53_body'):
-        #             route_1, route_2, route_3 = darknet53_body(inputs)
-        #
-        #         with tf.variable_scope('yolov3_head'):
-        #             inter1, net = yolo_block(route_3, 512)
-        #             feature_map_1 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
-        #                                         stride=1, normalizer_fn=None,
-        #                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
-        #             feature_map_1 = tf.identity(feature_map_1, name='feature_map_1')
-        #
-        #             inter1 = conv2d(inter1, 256, 1)
-        #             inter1 = upsample_layer(inter1, tf.shape(route_2))
-        #             concat1 = tf.concat([inter1, route_2], axis=3)
-        #
-        #             inter2, net = yolo_block(concat1, 256)
-        #             feature_map_2 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
-        #                                         stride=1, normalizer_fn=None,
-        #                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
-        #             feature_map_2 = tf.identity(feature_map_2, name='feature_map_2')
-        #
-        #             inter2 = conv2d(inter2, 128, 1)
-        #             inter2 = upsample_layer(inter2, tf.shape(route_1))
-        #             concat2 = tf.concat([inter2, route_1], axis=3)
-        #
-        #             _, feature_map_3 = yolo_block(concat2, 128)
-        #             feature_map_3 = slim.conv2d(feature_map_3, 3 * (5 + self.class_num), 1,
-        #                                         stride=1, normalizer_fn=None,
-        #                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
-        #             feature_map_3 = tf.identity(feature_map_3, name='feature_map_3')
-        #
-        #     return feature_map_1, feature_map_2, feature_map_3
+            return feature_map_1, feature_map_2, feature_map_3
 
     def reorg_layer(self, feature_map, anchors):
         '''

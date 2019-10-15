@@ -62,15 +62,15 @@ with tf.Session() as sess:
     '''
     darknet53 ckpt file -> darknet53 pb file 
     '''
-    # yolo_model = yolov3(args.num_class, args.anchors)
-    # with tf.variable_scope('yolov3'):
-    #     boxes, scores, labels = yolo_model.forward_get_result(input_data, False)
-    # saver = tf.train.Saver()
-    # saver.restore(sess, args.restore_path)
-    # constant_graph = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def, ["yolov3/yolov3_head/detect_bbox", "yolov3/yolov3_head/detect_scores", "yolov3/yolov3_head/detect_labels"])
-    # output_tensors = ["yolov3/yolov3_head/detect_bbox:0", "yolov3/yolov3_head/detect_scores:0", "yolov3/yolov3_head/detect_labels:0"]
-    # with tf.gfile.FastGFile("./yolo_result_darknet53.pb", mode='wb') as f:
-    #     f.write(constant_graph.SerializeToString())
+    yolo_model = yolov3(args.num_class, args.anchors)
+    with tf.variable_scope('yolov3'):
+        boxes, scores, labels = yolo_model.forward_get_result(input_data, False)
+    saver = tf.train.Saver()
+    saver.restore(sess, args.restore_path)
+    constant_graph = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def, ["yolov3/yolov3_head/detect_bbox", "yolov3/yolov3_head/detect_scores", "yolov3/yolov3_head/detect_labels"])
+    output_tensors = ["yolov3/yolov3_head/detect_bbox:0", "yolov3/yolov3_head/detect_scores:0", "yolov3/yolov3_head/detect_labels:0"]
+    with tf.gfile.FastGFile("./yolo_result_darknet53.pb", mode='wb') as f:
+        f.write(constant_graph.SerializeToString())
     ##########################################################################################
     '''
     prun model exlcude res ckpt file -> prun model exlcude res pb file 
