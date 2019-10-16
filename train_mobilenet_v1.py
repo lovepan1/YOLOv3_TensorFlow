@@ -81,7 +81,7 @@ y_pred = yolo_model.predict(pred_feature_maps)
 l2_loss = tf.losses.get_regularization_loss()
 
 # setting restore parts and vars to update
-saver_to_restore = tf.train.Saver(var_list=tf.contrib.framework.get_variables_to_restore(include=args.restore_part))
+# saver_to_restore = tf.train.Saver(var_list=tf.contrib.framework.get_variables_to_restore(include=args.restore_part))
 update_vars = tf.contrib.framework.get_variables_to_restore(include=args.update_part)
 
 tf.summary.scalar('train_batch_statistics/total_loss', loss[0])
@@ -117,7 +117,7 @@ with tf.control_dependencies(update_ops):
     train_op = optimizer.minimize(loss[0] + l2_loss, var_list=update_vars, global_step=global_step)
 with tf.Session() as sess:
     # os.environ["CUDA VISIBLE DEVICES"] = '0,1'
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     # with tf.device
     sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])

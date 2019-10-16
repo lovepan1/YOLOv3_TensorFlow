@@ -70,8 +70,8 @@ def residual_mobilenet(x, net_type, is_training, out_channel=1, expand_time=1, s
     if net_type in ['cnn', 'mobilenetv1']:
         out_channel = x.shape[3].value
         shortcut = x
-        x = conv_block_mobilet(x, [1, 1], [1, 1], out_channel // 2, net_type='cnn', is_training=is_training)
-        x = conv_block_mobilet(x, [3, 3], [1, 1], out_channel, net_type='cnn', is_training=is_training)
+        x = conv_block_mobilet(x, [1, 1], [1, 1], out_channel // 2, net_type='mobilenetv1', is_training=is_training)
+        x = conv_block_mobilet(x, [3, 3], [1, 1], out_channel, net_type='mobilenetv1', is_training=is_training)
         x += shortcut
 
     elif net_type == 'mobilenetv2':

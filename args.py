@@ -7,22 +7,22 @@ from utils.misc_utils import parse_anchors, read_class_names
 import math
 
 ### Some paths
-train_file = './data/my_data/train.txt'  # The path of the training txt file.
-val_file = './data/my_data/val.txt'  # The path of the validation txt file.
+train_file = './data/my_data/dianli_test_15_label.txt'  # The path of the training txt file.
+val_file = './data/my_data/dianli_test_15_label.txt'  # The path of the validation txt file.
 restore_path = './data/darknet_weights/yolov3.ckpt'  # The path of the weights to restore.
-save_dir = './checkpoint/'  # The directory of the weights to save.
+save_dir = './mobilenet_checkpoint/'  # The directory of the weights to save.
 log_dir = './data/logs/'  # The directory to store the tensorboard log files.
 progress_log_path = './data/progress.log'  # The path to record the training progress.
 anchor_path = './data/yolo_anchors.txt'  # The path of the anchor txt file.
-class_name_path = './data/coco.names'  # The path of the class names.
+class_name_path = './data/my_data/dianli.names'  # The path of the class names.
 
 ### Training releated numbers
-batch_size = 20
+batch_size = 32
 img_size = [416, 416]  # Images will be resized to `img_size` and fed to the network, size format: [width, height]
 total_epoches = 200
 train_evaluation_step = 100  # Evaluate on the training batch after some steps.
-val_evaluation_epoch = 1  # Evaluate on the whole validation dataset after some steps. Set to None to evaluate every epoch.
-save_epoch = 10  # Save the model after some epochs.
+val_evaluation_epoch = 5  # Evaluate on the whole validation dataset after some steps. Set to None to evaluate every epoch.
+save_epoch = 1  # Save the model after some epochs.
 batch_norm_decay = 0.99  # decay in bn ops
 weight_decay = 5e-4  # l2 weight decay
 global_step = 0  # used when resuming training
@@ -49,14 +49,14 @@ pw_values = [learning_rate_init, 3e-5, 1e-4]
 restore_part = ['yolov3/darknet53_body']
 # Choose the parts you want to finetune. List form.
 # Set to None to train the whole model.
-update_part = ['yolov3/yolov3_head']
+update_part = ['yolov3/darknet53_body', 'yolov3/yolov3_head']
 
 ### other training strategies
-multi_scale_train = False  # Whether to apply multi-scale training strategy. Image size varies from [320, 320] to [640, 640] by default.
-use_label_smooth = False # Whether to use class label smoothing strategy.
-use_focal_loss = False  # Whether to apply focal loss on the conf loss.
-use_mix_up = False  # Whether to use mix up data augmentation strategy. 
-use_warm_up = True  # whether to use warm up strategy to prevent from gradient exploding.
+multi_scale_train = True  # Whether to apply multi-scale training strategy. Image size varies from [320, 320] to [640, 640] by default.
+use_label_smooth = True # Whether to use class label smoothing strategy.
+use_focal_loss = True  # Whether to apply focal loss on the conf loss.
+use_mix_up = True  # Whether to use mix up data augmentation strategy.
+use_warm_up = False  # whether to use warm up strategy to prevent from gradient exploding.
 warm_up_epoch = 3  # Warm up training epoches. Set to a larger value if gradient explodes.
 
 ### some constants in validation

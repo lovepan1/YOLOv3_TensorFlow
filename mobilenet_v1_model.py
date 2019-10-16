@@ -43,9 +43,9 @@ class mobilenet_yolov3(object):
             'fused': None,  # Use fused batch norm if possible.
         }
         with tf.variable_scope('darknet53_mobilenet_body'):
-            route_1, route_2, route_3 = darknet53_mobilenet_body(inputs, net_type='mobilenet_v1')
+            route_1, route_2, route_3 = darknet53_mobilenet_body(inputs, net_type='mobilenetv1', is_training=is_training)
         with tf.variable_scope('yolov3_head'):
-            inter1, net = yolo_block_mobilenet(route_3, 512, net_type='mobilenet_v1')
+            inter1, net = yolo_block_mobilenet(route_3, 512, net_type='mobilenetv1', is_training=is_training)
             feature_map_1 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                         stride=1, normalizer_fn=None,
                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
@@ -55,7 +55,7 @@ class mobilenet_yolov3(object):
             inter1 = upsample_layer(inter1, tf.shape(route_2))
             concat1 = tf.concat([inter1, route_2], axis=3)
 
-            inter2, net = yolo_block_mobilenet(concat1, 256, net_type='mobilenet_v1')
+            inter2, net = yolo_block_mobilenet(concat1, 256, net_type='mobilenetv1', is_training=is_training)
             feature_map_2 = slim.conv2d(net, 3 * (5 + self.class_num), 1,
                                         stride=1, normalizer_fn=None,
                                         activation_fn=None, biases_initializer=tf.zeros_initializer())
@@ -65,7 +65,7 @@ class mobilenet_yolov3(object):
             inter2 = upsample_layer(inter2, tf.shape(route_1))
             concat2 = tf.concat([inter2, route_1], axis=3)
 
-            _, feature_map_3 = yolo_block_mobilenet(concat2, 128, net_type='mobilenet_v1')
+            _, feature_map_3 = yolo_block_mobilenet(concat2, 128, net_type='mobilenetv1', is_training=is_training)
             feature_map_3 = slim.conv2d(feature_map_3, 3 * (5 + self.class_num), 1,
                                         stride=1, normalizer_fn=None,
                                         activation_fn=None, biases_initializer=tf.zeros_initializer())

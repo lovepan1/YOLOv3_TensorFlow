@@ -1,0 +1,2 @@
+model_checkpoint_path: "best_model_Epoch_5_step_1127.0_mAP_0.0000_loss_18.8034_lr_0.00096"
+all_model_checkpoint_paths: "best_model_Epoch_5_step_1127.0_mAP_0.0000_loss_18.8034_lr_0.00096"
